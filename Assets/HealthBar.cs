@@ -18,7 +18,7 @@ public class HealthBar : MonoBehaviour
         if (target != null)
         {
             Vector3 screenPos = Camera.main.WorldToScreenPoint(target.position);
-            screenPos.y += 30f; 
+            screenPos.y += 45f; 
             transform.position = screenPos;
         }
     }

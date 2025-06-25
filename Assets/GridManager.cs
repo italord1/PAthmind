@@ -247,6 +247,11 @@ public class GridManager : MonoBehaviour
             ShowWinPopup(2);
         else if (player2.health <= 0)
             ShowWinPopup(1);
+
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            Application.Quit(); 
+        }
     }
 
     void RestartGameForPlayer(PlayerController player)
