@@ -1,3 +1,4 @@
+﻿using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -31,6 +32,9 @@ public class GridManager : MonoBehaviour
     public GameObject winPopupPanel;
     public TMP_Text winMessageText;
 
+    private bool isAgainstAI;
+
+
     [System.Serializable]
     public struct TilePrefabEntry
     {
@@ -44,6 +48,8 @@ public class GridManager : MonoBehaviour
     private Tile[,] grid;
     void Start()
     {
+        isAgainstAI = GameSettings.IsAgainstAI;
+       
         // Create containers
         tilesContainer = new GameObject("TilesContainer").transform;
         tilesContainer.parent = transform;
@@ -120,6 +126,11 @@ public class GridManager : MonoBehaviour
         player2.playerNumber = 2;
         player2.MoveTo(startTile);
 
+        if (isAgainstAI)
+        {
+            Invoke(nameof(MoveAIPlayer), 1f); // להתחיל את התנועה אחרי שנייה
+        }
+
         SetupHealthBar(player1);
         SetupHealthBar(player2);
 
@@ -153,6 +164,156 @@ public class GridManager : MonoBehaviour
         HighlightPath(path);
     }
 
+    void MoveAIPlayer()
+    {
+        Tile startTile = player2.currentTile;
+        Tile goalTile = grid[width - 1, height - 1];
+
+        List<Tile> safePath = FindSafePathForAI(startTile, goalTile, player2.health);
+
+        if (safePath == null || safePath.Count <= 1)
+        {
+            Debug.Log("AI couldn't find a survivable path!");
+            return;
+        }
+
+        // Log path
+        string pathLog = "AI Path:";
+        foreach (Tile tile in safePath)
+            pathLog += $" -> {tile.gridPosition}";
+        Debug.Log(pathLog);
+
+        safePath.RemoveAt(0); // Skip current tile
+        StartCoroutine(MoveAIAlongPath(safePath));
+    }
+    public List<Tile> FindSafePathForAI(Tile start, Tile goal, int startingHealth)
+    {
+        Dictionary<(Tile, int), PathNode> openSet = new();
+        Queue<PathNode> frontier = new();
+        HashSet<(Tile, int)> visited = new();
+
+        PathNode startNode = new PathNode(start)
+        {
+            gCost = 0,
+            hCost = Heuristic(start, goal),
+            remainingHealth = startingHealth
+        };
+
+        frontier.Enqueue(startNode);
+        openSet[(start, startingHealth)] = startNode;
+
+        while (frontier.Count > 0)
+        {
+            PathNode current = frontier.Dequeue();
+
+            if (current.tile == goal)
+                return ReconstructPath(current);
+
+            // Allow waiting multiple times on a healing tile
+            if (current.tile.tileType == TileType.Resource && current.remainingHealth < 40)
+            {
+                int maxWaits = 5;
+
+                for (int i = 1; i <= maxWaits; i++)
+                {
+                    int healedHealth = Mathf.Clamp(current.remainingHealth + current.tile.healthImpact, 0, 40);
+                    var restKey = (current.tile, healedHealth);
+
+                    if (healedHealth > current.remainingHealth && !visited.Contains(restKey))
+                    {
+                        visited.Add(restKey);
+
+                        PathNode restNode = new PathNode(current.tile)
+                        {
+                            parent = current,
+                            gCost = current.gCost + 1,
+                            hCost = current.hCost,
+                            remainingHealth = healedHealth
+                        };
+
+                        frontier.Enqueue(restNode);
+                        current = restNode; // ← update current so next loop waits again on same tile
+                    }
+                    else
+                    {
+                        break; // stop trying to rest if no healing happened
+                    }
+                }
+            }
+
+           foreach (Tile neighbor in GetNeighbors(current.tile))
+                 {
+                int healthAfterMove = current.remainingHealth + neighbor.healthImpact;
+                healthAfterMove = Mathf.Clamp(healthAfterMove, 0, 40);
+
+                if (healthAfterMove <= 0)
+                    continue;
+
+                var key = (neighbor, healthAfterMove);
+                if (visited.Contains(key))
+                    continue;
+
+                visited.Add(key);
+
+                PathNode neighborNode = new PathNode(neighbor)
+                {
+                    parent = current,
+                    gCost = current.gCost + 1, // simple step cost
+                    hCost = Heuristic(neighbor, goal),
+                    remainingHealth = healthAfterMove
+                };
+
+                frontier.Enqueue(neighborNode);
+            }
+        }
+
+        return null; // No survivable path found
+    }
+
+
+
+    private IEnumerator MoveAIAlongPath(List<Tile> path)
+    {
+        Tile previousTile = player2.currentTile;
+        HashSet<Tile> visited = new HashSet<Tile> { previousTile };
+
+        for (int i = 0; i < path.Count; i++)
+        {
+            Tile tile = path[i];
+
+            if (player2.health <= 0 || player2.currentTile.tileType == TileType.Goal)
+                yield break;
+
+            bool isWaiting = (tile == previousTile);
+
+            if (!isWaiting)
+            {
+                int healthBeforeMove = player2.health;
+                player2.MoveTo(tile);
+                int healthAfterMove = player2.health;
+
+                // Undo the internal health change done by MoveTo()
+                int internalHealthChange = healthAfterMove - healthBeforeMove;
+                player2.health -= internalHealthChange;
+
+                // Now apply your own health impact explicitly (exactly once)
+                player2.health += tile.healthImpact;
+
+                Debug.Log($"Moved to {tile.gridPosition} - Health impact: {tile.healthImpact}, Health now: {player2.health}");
+            }
+            else if (tile.tileType == TileType.Resource)
+            {
+                player2.health += tile.healthImpact;
+                Debug.Log($"Waiting on {tile.gridPosition} (Resource) - Health impact: {tile.healthImpact}, Health now: {player2.health}");
+            }
+
+            player2.health = Mathf.Clamp(player2.health, 0, 40);
+            player2.healthBar.SetHealth(player2.health);
+
+            previousTile = tile;
+            yield return new WaitForSeconds(0.5f);
+        }
+    }
 
     public void HighlightPath(List<Tile> path)
     {
@@ -229,14 +390,14 @@ public class GridManager : MonoBehaviour
             RestartGameForPlayer(player2);
         }
 
-        if (!player2Restarted && Input.GetKeyDown(player2RestartKey))
+        if (!isAgainstAI && !player2Restarted && Input.GetKeyDown(player2RestartKey))
         {
             player2Restarted = true;
             RestartGameForPlayer(player1);
             RestartGameForPlayer(player2);
         }
 
-        Debug.Log(player1.playerNumber);
+       
 
         if (player1.currentTile.tileType == TileType.Goal)
             ShowWinPopup(1);
@@ -382,6 +543,8 @@ public class GridManager : MonoBehaviour
         player1Restarted = false;
         player2Restarted = false;
 
+        isAgainstAI = GameSettings.IsAgainstAI;
+
         ResetBoard();
     }
 
@@ -391,6 +554,7 @@ public class GridManager : MonoBehaviour
         public PathNode parent;
         public int gCost; // Cost from start to this node
         public int hCost; // Heuristic cost to goal
+        public int remainingHealth;
         public int fCost => gCost + hCost;
 
         public PathNode(Tile tile)

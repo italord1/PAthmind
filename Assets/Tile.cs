@@ -42,7 +42,7 @@ public class Tile : MonoBehaviour
                 movementCost = Mathf.Infinity; // Not walkable
                 break;
             case TileType.Resource:
-                healthImpact = +2;   // Increase healing amount
+                healthImpact = +4;   // Increase healing amount
                 movementCost = 1f;
                 break;
             case TileType.Ground_Normal:
@@ -54,7 +54,7 @@ public class Tile : MonoBehaviour
                 movementCost = 2f;
                 break;
             case TileType.Ground_Dangerous:
-                healthImpact = -12;   // High damage and slowest
+                healthImpact = -10;   // High damage and slowest
                 movementCost = 3f;
                 break;
             case TileType.Goal:
