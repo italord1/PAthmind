@@ -378,6 +378,10 @@ public class GridManager : MonoBehaviour
     public void RestartGameFromPopup()
     {
         winPopupPanel.SetActive(false);
+
+        player1Restarted = false;
+        player2Restarted = false;
+
         ResetBoard();
     }
 
