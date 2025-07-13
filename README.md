@@ -25,7 +25,7 @@
 | https://youtu.be/oOvCf5O6EdE | מצגת מסבירה את הפרויקט |
 | https://youtu.be/RWECmPxPPic | תיעוד ויזואלי של משחק רץ |
 | תיקיות `Assets` ו־`Scripts` | קוד המקור המלא של המשחק |
-| תיקיית zip של build | להורדת המשחק |
+| תיקיית zip של build תחת לשונית releases | להורדת המשחק |
 
 ---
 
